@@ -329,60 +329,70 @@ sgd_meta_only = Differentiable(sgd_meta_only,
 
 
 def sgd_parsed(L_grad, hypers, parser, callback=None, forward_pass_only=True):
-    """This version has alphas and betas be TxN_weight_types matrices.
-       parser is a dict containing the indices for the different types of weights."""
+    """
+        This version has alphas and betas be TxN_weight_types matrices.
+        parser is a dict containing the indices for the different types of weights.
+    """
+    
     x0, alphas, betas, meta = hypers
     X, V = ExactRep(x0), ExactRep(np.zeros(x0.size))
     iters = zip(range(len(alphas)), alphas, betas)
+    
+    # Train model w/ SGD + momentum
     for i, alpha, beta in iters:
+        # Compute gradient
         g = L_grad(X.val, meta, i)
-        if callback: callback(X.val, V.val, g, i)
+        
+        if callback:
+            callback(X.val, V.val, g, i)
+        
         cur_alpha_vect = fill_parser(parser, alpha)
         cur_beta_vect  = fill_parser(parser, beta)
         V.mul(cur_beta_vect).sub((1.0 - cur_beta_vect) * g)
         X.add(cur_alpha_vect * V.val)
+    
     x_final = X.val
-
+    
     if forward_pass_only:
         return x_final
-
+    
+    # Hypergradient calculation
     def hypergrad(outgrad):
         d_x = outgrad
         d_alphas, d_betas = np.zeros(alphas.shape), np.zeros(betas.shape)
         d_v, d_meta = np.zeros(d_x.shape), np.zeros(meta.shape)
+        
         grad_proj = lambda x, meta, d, i: np.dot(L_grad(x, meta, i), d)
         L_hvp_x    = grad(grad_proj, 0)  # Returns a size(x) output.
         L_hvp_meta = grad(grad_proj, 1)  # Returns a size(meta) output.
+        
         for i, alpha, beta in iters[::-1]:
-
+            
             # build alpha and beta vector
             cur_alpha_vect = fill_parser(parser, alpha)
             cur_beta_vect  = fill_parser(parser, beta)
             for j, (_, (ixs, _)) in enumerate(parser.idxs_and_shapes.iteritems()):
                 d_alphas[i,j] = np.dot(d_x[ixs], V.val[ixs])
-
+                
             X.sub(cur_alpha_vect * V.val)                        # Reverse position update
             g = L_grad(X.val, meta, i)                           # Evaluate gradient
             V.add((1.0 - cur_beta_vect) * g).div(cur_beta_vect)  # Reverse momentum update
-
+            
             d_v += d_x * cur_alpha_vect
-
+            
             for j, (_, (ixs, _)) in enumerate(parser.idxs_and_shapes.iteritems()):
                 d_betas[i,j] = np.dot(d_v[ixs], V.val[ixs] + g[ixs])
-
-            d_x    -= L_hvp_x(X.val, meta, (1.0 - cur_beta_vect)*d_v, i)
-            d_meta -= L_hvp_meta(X.val, meta, (1.0 - cur_beta_vect)* d_v, i)
+                
+            d_x    -= L_hvp_x(X.val, meta, (1.0 - cur_beta_vect) * d_v, i)
+            d_meta -= L_hvp_meta(X.val, meta, (1.0 - cur_beta_vect) * d_v, i)
             d_v    *= cur_beta_vect
+        
         assert np.all(ExactRep(x0).val == X.val)
         return d_x, d_alphas, d_betas, d_meta
 
     return x_final, [None, hypergrad]
 
-sgd_parsed = Differentiable(sgd_parsed,
-                            partial(sgd_parsed, forward_pass_only=False))
-
-
-
+sgd_parsed = Differentiable(sgd_parsed, partial(sgd_parsed, forward_pass_only=False))
 
 
 # Non-reversible code
@@ -419,12 +429,15 @@ def adam(grad, x, callback=None, num_iters=100,
     for i in xrange(num_iters):
         b1t = 1 - (1-b1)*(lam**i)
         g = grad(x, i)
-        if callback: callback(x, i, g)
-        m = b1t*g     + (1-b1t)*m   # First  moment estimate
-        v = b2*(g**2) + (1-b2)*v    # Second moment estimate
+        if callback: 
+            callback(x, i, g)
+        
+        m = b1t * g + (1-b1t) * m   # First  moment estimate
+        v = b2*(g**2) + (1-b2) * v    # Second moment estimate
         mhat = m/(1-(1-b1)**(i+1))  # Bias correction
         vhat = v/(1-(1-b2)**(i+1))
         x -= step_size*mhat/(np.sqrt(vhat) + eps)
+    
     return x
 
 def bfgs(obj_and_grad, x, callback=None, num_iters=100):

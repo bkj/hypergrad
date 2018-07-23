@@ -6,7 +6,7 @@ import numpy as np
 import pickle
 
 def datapath(fname):
-    datadir = os.path.expanduser('~/repos/hypergrad/data/mnist')
+    datadir = os.path.expanduser('~/software/hypergrad/data/mnist')
     return os.path.join(datadir, fname)
 
 def mnist():
@@ -33,8 +33,8 @@ def lecun_gz_to_pickle():
         pickle.dump(data, f, 1)
 
 def load_data(normalize=False):
-    with open(datapath("mnist_data.pkl")) as f:
-        train_images, train_labels, test_images, test_labels = pickle.load(f)
+    with open(datapath("mnist_data.pkl"), 'rb') as f:
+        train_images, train_labels, test_images, test_labels = pickle.load(f, encoding='latin1')
 
     one_hot = lambda x, K : np.array(x[:,None] == np.arange(K)[None, :], dtype=int)
     partial_flatten = lambda x : np.reshape(x, (x.shape[0], np.prod(x.shape[1:])))

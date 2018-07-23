@@ -1,6 +1,3 @@
-"""Gradient descent to optimize everything,
-subject to the constraint that weight initialization can't be set to zero,
-and using a adam for the meta-optimization."""
 import numpy as np
 import numpy.random as npr
 import pickle

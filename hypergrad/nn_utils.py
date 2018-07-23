@@ -28,44 +28,45 @@ class VectorParser(object):
     def __init__(self):
         self.idxs_and_shapes = OrderedDict()
         self.vect = np.zeros((0,))
-
+        
     def add_shape(self, name, shape):
         start = len(self.vect)
         size = np.prod(shape)
         self.idxs_and_shapes[name] = (slice(start, start + size), shape)
         self.vect = np.concatenate((self.vect, np.zeros(size)), axis=0)
-
+        
     def new_vect(self, vect):
         assert vect.size == self.vect.size
         new_parser = self.empty_copy()
         new_parser.vect = vect
         return new_parser
-
+        
     def empty_copy(self):
         """Creates a parser with a blank vector."""
         new_parser = VectorParser()
         new_parser.idxs_and_shapes = self.idxs_and_shapes.copy()
         new_parser.vect = None
         return new_parser
-
+        
     def as_dict(self):
         return {k : self[k] for k in self.names}
-
+        
     @property
     def names(self):
         return self.idxs_and_shapes.keys()
-
+        
     def __getitem__(self, name):
         idxs, shape = self.idxs_and_shapes[name]
         return np.reshape(self.vect[idxs], shape)
-
+        
     def __setitem__(self, name, val):
         if isinstance(val, list): val = np.array(val)
         if name not in self.idxs_and_shapes:
             self.add_shape(name, val.shape)
-
+            
         idxs, shape = self.idxs_and_shapes[name]
         self.vect[idxs].reshape(shape)[:] = val
+
 
 def fill_parser(parser, items):
     """Build a vector by assigning each block the corresponding value in
@@ -87,7 +88,7 @@ def logsumexp(X, axis):
     return max_X + np.log(np.sum(np.exp(X - max_X), axis=axis, keepdims=True))
 
 def logit(x): return 1 / (1 + np.exp(-x))
-def inv_logit(y): return -np.log( 1/y - 1)
+def inv_logit(y): return -np.log(1 / y - 1)
 def d_logit(x): return logit(x) * (1 - logit(x))
 
 def make_nn_funs(layer_sizes):
@@ -111,7 +112,7 @@ def make_nn_funs(layer_sizes):
                 cur_units = np.tanh(cur_units)
         return cur_units
 
-    def loss(W_vect, X, T, L2_reg=0.0):
+    def loss_fun(W_vect, X, T, L2_reg=0.0):
         # TODO: consider treating L2_reg as a matrix
         log_prior = -np.dot(W_vect * L2_reg, W_vect)
         log_lik = np.sum(predictions(W_vect, X) * T) / X.shape[0]
@@ -121,7 +122,7 @@ def make_nn_funs(layer_sizes):
         preds = np.argmax(predictions(W_vect, X), axis=1)
         return np.mean(np.argmax(T, axis=1) != preds)
 
-    return parser, predictions, loss, frac_err
+    return parser, predictions, loss_fun, frac_err
 
 def nice_layer_name(weight_key):
     """Takes a tuple like ('weights', 2) and returns a nice string like "2nd layer weights"
